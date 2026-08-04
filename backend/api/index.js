@@ -11,6 +11,29 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Root route - shows available endpoints
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Polly Consults API is running on Vercel',
+    endpoints: {
+      health: '/health',
+      auth: '/auth/login',
+      customers: '/customers',
+      loans: '/loans',
+      payments: '/payments',
+      expenses: '/expenses',
+      inventory: '/inventory',
+      sales: '/sales',
+      audit: '/audit',
+      financial: '/financial',
+      reports: '/reports',
+      settings: '/settings',
+      notifications: '/notifications'
+    }
+  });
+});
+
 // Mount routes
 app.use('/auth', require('../src/routes/auth.routes'));
 app.use('/customers', require('../src/routes/customer.routes'));
@@ -33,7 +56,11 @@ app.get('/health', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ 
+    error: 'Route not found',
+    path: req.path,
+    available: ['/', '/health', '/auth/login', '/customers', '/loans', '/payments', '/expenses', '/inventory', '/sales', '/audit', '/financial', '/reports', '/settings', '/notifications']
+  });
 });
 
 // Error handler
