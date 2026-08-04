@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "projects": [
+    {
+      "name": "polly-consults-frontend",
+      "rootDirectory": "frontend"
+    },
+    {
+      "name": "polly-consults-api",
+      "rootDirectory": "backend"
+    }
+  ]
+}
