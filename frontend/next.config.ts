@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
   },
   async redirects() {
     return [
@@ -27,7 +27,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Remove output: 'standalone' and remove experimental options
 };
 
 export default nextConfig;

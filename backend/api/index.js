@@ -3,35 +3,38 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const serverless = require('serverless-http');
-const pool = require('../src/config/db');
+require('dotenv').config();
 
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: ['https://polly-consults-frontend.vercel.app', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 
-// Root route - shows available endpoints
+// Root route
 app.get('/', (req, res) => {
-  res.json({
-    status: 'ok',
+  res.json({ 
+    status: 'ok', 
     message: 'Polly Consults API is running on Vercel',
-    endpoints: {
-      health: '/health',
-      auth: '/auth/login',
-      customers: '/customers',
-      loans: '/loans',
-      payments: '/payments',
-      expenses: '/expenses',
-      inventory: '/inventory',
-      sales: '/sales',
-      audit: '/audit',
-      financial: '/financial',
-      reports: '/reports',
-      settings: '/settings',
-      notifications: '/notifications'
-    }
+    environment: process.env.NODE_ENV || 'production'
   });
+});
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'API is healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Test route
+app.get('/test', (req, res) => {
+  res.json({ message: 'Test route is working!' });
 });
 
 // Mount routes
@@ -49,24 +52,23 @@ app.use('/sales', require('../src/routes/sales.routes'));
 app.use('/audit', require('../src/routes/audit.routes'));
 app.use('/financial', require('../src/routes/financial.routes'));
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'API is running on Vercel' });
-});
-
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ 
     error: 'Route not found',
     path: req.path,
-    available: ['/', '/health', '/auth/login', '/customers', '/loans', '/payments', '/expenses', '/inventory', '/sales', '/audit', '/financial', '/reports', '/settings', '/notifications']
+    method: req.method,
+    available: ['/', '/health', '/test', '/auth/login', '/customers', '/loans']
   });
 });
 
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  res.status(500).json({ 
+    error: err.message || 'Internal server error',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 // Vercel serverless export

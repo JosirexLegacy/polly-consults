@@ -5,12 +5,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "vercel-build": "echo Hello"
+    "vercel-build": "echo 'Backend build complete'"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "Polly Consults Management System API",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",

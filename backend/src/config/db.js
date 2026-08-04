@@ -1,3 +1,4 @@
+// src/config/db.js
 const { Pool } = require('pg');
 require('dotenv').config();
 
@@ -31,6 +32,9 @@ if (process.env.DATABASE_URL) {
 
 const pool = new Pool(poolConfig);
 
+// Query helper function - THIS IS IMPORTANT for your controllers
+const query = (text, params) => pool.query(text, params);
+
 pool.on('connect', () => {
   console.log('✅ Connected to Neon PostgreSQL');
 });
@@ -42,6 +46,7 @@ pool.on('error', (err) => {
   }
 });
 
+// Test connection
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
     console.error('❌ Database connection failed:', err.message);
@@ -50,4 +55,9 @@ pool.query('SELECT NOW()', (err, res) => {
   }
 });
 
-module.exports = pool;
+module.exports = {
+  pool,
+  query, // ✅ Export query function
+  // For backwards compatibility with older code
+  ...pool
+};
