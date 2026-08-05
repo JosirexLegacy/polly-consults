@@ -21,9 +21,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
 
-// Handle preflight requests
-app.options('*', cors());
-
 app.use(express.json());
 
 // ==================== AUTH MIDDLEWARE ====================
@@ -107,12 +104,13 @@ const routeFiles = [
 routeFiles.forEach(routeName => {
   try {
     const routePath = `./src/routes/${routeName}.routes.js`;
+    console.log(`📁 Checking for ${routePath}...`);
     if (fs.existsSync(routePath)) {
       const route = require(routePath);
       app.use(`/${routeName}`, route);
       console.log(`✅ ${routeName} routes mounted`);
     } else {
-      console.log(`⚠️ ${routeName}.routes.js not found`);
+      console.log(`⚠️ ${routeName}.routes.js not found at ${routePath}`);
     }
   } catch (error) {
     console.error(`❌ Error loading ${routeName}:`, error.message);
