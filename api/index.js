@@ -1,19 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const serverless = require('serverless-http');
-const fs = require('fs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 
 console.log('🚀 Backend starting...');
-console.log('📁 Current directory:', __dirname);
-console.log('📁 Files in current directory:', fs.readdirSync('.').join(', '));
-console.log('📁 Does src/routes/auth.routes.js exist?', fs.existsSync('./src/routes/auth.routes.js'));
 
 app.use(cors());
 app.use(express.json());
 
-// Log all requests for debugging
+// Log all requests
 app.use((req, res, next) => {
   console.log(`📝 ${req.method} ${req.path}`);
   next();
@@ -38,66 +35,43 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Test route works!' });
 });
 
-// Mount routes with detailed error logging
-try {
-  console.log('📁 Attempting to load auth routes...');
-  const authRoutes = require('./src/routes/auth.routes');
-  console.log('📁 Auth routes loaded, type:', typeof authRoutes);
-  app.use('/auth', authRoutes);
-  console.log('✅ Auth routes mounted');
-} catch (error) {
-  console.error('❌ Auth error:', error.message);
-  console.error('❌ Auth error stack:', error.stack);
-}
+// DIRECT LOGIN ENDPOINT - No routes file needed
+app.post('/auth/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    console.log('🔍 Login attempt for:', username);
 
-try {
-  app.use('/customers', require('./src/routes/customer.routes'));
-  console.log('✅ Customers routes mounted');
-} catch (error) {
-  console.error('❌ Customers error:', error.message);
-}
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
 
-try {
-  app.use('/loans', require('./src/routes/loan.routes'));
-  console.log('✅ Loans routes mounted');
-} catch (error) {
-  console.error('❌ Loans error:', error.message);
-}
+    // Hardcoded credentials - single user system
+    const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-try {
-  app.use('/payments', require('./src/routes/payment.routes'));
-  console.log('✅ Payments routes mounted');
-} catch (error) {
-  console.error('❌ Payments error:', error.message);
-}
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      const token = jwt.sign(
+        { username: ADMIN_USERNAME, role: 'admin' },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
 
-try {
-  app.use('/expenses', require('./src/routes/expense.routes'));
-  console.log('✅ Expenses routes mounted');
-} catch (error) {
-  console.error('❌ Expenses error:', error.message);
-}
+      return res.json({
+        success: true,
+        token,
+        admin: {
+          username: ADMIN_USERNAME,
+          full_name: 'System Administrator'
+        }
+      });
+    }
 
-try {
-  app.use('/reports', require('./src/routes/report.routes'));
-  console.log('✅ Reports routes mounted');
-} catch (error) {
-  console.error('❌ Reports error:', error.message);
-}
-
-try {
-  app.use('/inventory', require('./src/routes/inventory.routes'));
-  console.log('✅ Inventory routes mounted');
-} catch (error) {
-  console.error('❌ Inventory error:', error.message);
-}
-
-try {
-  app.use('/sales', require('./src/routes/sales.routes'));
-  console.log('✅ Sales routes mounted');
-} catch (error) {
-  console.error('❌ Sales error:', error.message);
-}
+    return res.status(401).json({ error: 'Invalid credentials' });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // 404 handler
 app.use((req, res) => {
@@ -105,17 +79,14 @@ app.use((req, res) => {
   res.status(404).json({ 
     error: 'Route not found',
     path: req.path,
-    available: ['/', '/health', '/test', '/auth/login', '/customers', '/loans', '/payments', '/expenses', '/reports', '/inventory', '/sales']
+    available: ['/', '/health', '/test', '/auth/login', '/customers', '/loans']
   });
 });
 
-// Global error handler
+// Error handler
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err.message);
-  console.error('Stack:', err.stack);
-  res.status(500).json({ 
-    error: err.message || 'Internal server error' 
-  });
+  res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
 module.exports = app;
