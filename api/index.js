@@ -7,9 +7,23 @@ const fs = require('fs');
 const app = express();
 
 console.log('🚀 Backend starting...');
-console.log('📁 Files in src/routes:', fs.readdirSync('./src/routes').join(', '));
 
-app.use(cors());
+// ==================== CORS FIX ====================
+app.use(cors({
+  origin: [
+    'https://polly-consults-frontend.vercel.app',
+    'https://polly-consults-frontend.vercel.app/',
+    'http://localhost:3000',
+    'http://localhost:5000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 
 // ==================== AUTH MIDDLEWARE ====================
@@ -30,7 +44,6 @@ const authMiddleware = (req, res, next) => {
 
 // ==================== PUBLIC ROUTES ====================
 
-// Root route
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -39,12 +52,10 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Healthy' });
 });
 
-// Test route
 app.get('/test', (req, res) => {
   res.json({ message: 'Test route works!' });
 });
@@ -88,19 +99,9 @@ app.post('/auth/login', (req, res) => {
 
 // ==================== LOAD ALL ROUTE FILES ====================
 const routeFiles = [
-  'auth',
-  'customers', 
-  'loans', 
-  'payments', 
-  'expenses', 
-  'reports',
-  'inventory', 
-  'sales', 
-  'capital', 
-  'financial', 
-  'notifications', 
-  'audit', 
-  'settings'
+  'auth', 'customers', 'loans', 'payments', 'expenses', 'reports',
+  'inventory', 'sales', 'capital', 'financial', 'notifications', 
+  'audit', 'settings'
 ];
 
 routeFiles.forEach(routeName => {
