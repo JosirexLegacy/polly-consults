@@ -2,19 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const serverless = require('serverless-http');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
 
 const app = express();
 
 console.log('🚀 Backend starting...');
+console.log('📁 Files in src/routes:', fs.readdirSync('./src/routes').join(', '));
 
 app.use(cors());
 app.use(express.json());
-
-// Log all requests
-app.use((req, res, next) => {
-  console.log(`📝 ${req.method} ${req.path}`);
-  next();
-});
 
 // ==================== AUTH MIDDLEWARE ====================
 const authMiddleware = (req, res, next) => {
@@ -90,261 +86,36 @@ app.post('/auth/login', (req, res) => {
   }
 });
 
-// ==================== PROTECTED ROUTES ====================
+// ==================== LOAD ALL ROUTE FILES ====================
+const routeFiles = [
+  'auth',
+  'customers', 
+  'loans', 
+  'payments', 
+  'expenses', 
+  'reports',
+  'inventory', 
+  'sales', 
+  'capital', 
+  'financial', 
+  'notifications', 
+  'audit', 
+  'settings'
+];
 
-// ---------- AUTH ----------
-app.get('/auth/me', authMiddleware, (req, res) => {
-  res.json({
-    username: req.admin.username,
-    full_name: 'System Administrator',
-    role: 'admin'
-  });
-});
-
-// ---------- CUSTOMERS ----------
-app.get('/customers', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, name: 'John Doe', phone: '0712345678', email: 'john@example.com' },
-    { id: 2, name: 'Jane Smith', phone: '0723456789', email: 'jane@example.com' }
-  ]);
-});
-
-app.get('/customers/:id', authMiddleware, (req, res) => {
-  res.json({ id: parseInt(req.params.id), name: 'Customer ' + req.params.id, phone: '0712345678' });
-});
-
-app.post('/customers', authMiddleware, (req, res) => {
-  res.status(201).json({ id: Date.now(), ...req.body });
-});
-
-app.put('/customers/:id', authMiddleware, (req, res) => {
-  res.json({ id: parseInt(req.params.id), ...req.body });
-});
-
-app.delete('/customers/:id', authMiddleware, (req, res) => {
-  res.json({ message: 'Customer ' + req.params.id + ' deleted' });
-});
-
-// ---------- LOANS ----------
-app.get('/loans', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, customer_id: 1, amount: 1000000, status: 'active', date: '2026-01-15' },
-    { id: 2, customer_id: 2, amount: 500000, status: 'completed', date: '2026-02-20' }
-  ]);
-});
-
-app.get('/loans/:id', authMiddleware, (req, res) => {
-  res.json({ id: parseInt(req.params.id), customer_id: 1, amount: 1000000, status: 'active' });
-});
-
-app.post('/loans', authMiddleware, (req, res) => {
-  res.status(201).json({ id: Date.now(), ...req.body });
-});
-
-app.put('/loans/:id', authMiddleware, (req, res) => {
-  res.json({ id: parseInt(req.params.id), ...req.body });
-});
-
-app.delete('/loans/:id', authMiddleware, (req, res) => {
-  res.json({ message: 'Loan ' + req.params.id + ' deleted' });
-});
-
-// ---------- PAYMENTS ----------
-app.get('/payments', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, loan_id: 1, amount: 100000, date: '2026-01-20', method: 'cash' },
-    { id: 2, loan_id: 1, amount: 150000, date: '2026-02-20', method: 'mobile' }
-  ]);
-});
-
-app.get('/payments/:id', authMiddleware, (req, res) => {
-  res.json({ id: parseInt(req.params.id), loan_id: 1, amount: 100000, method: 'cash' });
-});
-
-app.post('/payments', authMiddleware, (req, res) => {
-  res.status(201).json({ id: Date.now(), ...req.body });
-});
-
-app.delete('/payments/:id', authMiddleware, (req, res) => {
-  res.json({ message: 'Payment ' + req.params.id + ' deleted' });
-});
-
-// ---------- EXPENSES ----------
-app.get('/expenses', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, description: 'Office rent', amount: 200000, category: 'rent', date: '2026-01-01' },
-    { id: 2, description: 'Utilities', amount: 50000, category: 'utilities', date: '2026-01-15' }
-  ]);
-});
-
-app.post('/expenses', authMiddleware, (req, res) => {
-  res.status(201).json({ id: Date.now(), ...req.body });
-});
-
-// ---------- REPORTS ----------
-app.get('/reports', authMiddleware, (req, res) => {
-  res.json({
-    summary: {
-      totalCustomers: 156,
-      activeLoans: 89,
-      totalRevenue: 1250000,
-      totalExpenses: 450000
+routeFiles.forEach(routeName => {
+  try {
+    const routePath = `./src/routes/${routeName}.routes.js`;
+    if (fs.existsSync(routePath)) {
+      const route = require(routePath);
+      app.use(`/${routeName}`, route);
+      console.log(`✅ ${routeName} routes mounted`);
+    } else {
+      console.log(`⚠️ ${routeName}.routes.js not found`);
     }
-  });
-});
-
-app.get('/reports/dashboard', authMiddleware, (req, res) => {
-  res.json({
-    stats: {
-      totalCustomers: 156,
-      activeLoans: 89,
-      totalRevenue: 1250000,
-      totalExpenses: 450000
-    },
-    chartData: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-      values: [150000, 180000, 200000, 220000, 240000, 260000]
-    },
-    recentActivity: []
-  });
-});
-
-// ---------- INVENTORY ----------
-app.get('/inventory', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, name: 'Laptop', quantity: 10, price: 1500000 },
-    { id: 2, name: 'Chair', quantity: 25, price: 150000 }
-  ]);
-});
-
-app.get('/inventory/products', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, name: 'Laptop', category: 'Electronics', stock: 10 },
-    { id: 2, name: 'Chair', category: 'Furniture', stock: 25 }
-  ]);
-});
-
-app.get('/inventory/categories', authMiddleware, (req, res) => {
-  res.json(['Electronics', 'Furniture', 'Office Supplies', 'Equipment', 'Stationery']);
-});
-
-// ---------- SALES ----------
-app.get('/sales', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, product: 'Laptop', quantity: 2, total: 3000000, date: '2026-03-01' },
-    { id: 2, product: 'Chair', quantity: 5, total: 750000, date: '2026-03-05' }
-  ]);
-});
-
-app.post('/sales', authMiddleware, (req, res) => {
-  res.status(201).json({ id: Date.now(), ...req.body });
-});
-
-app.get('/sales/:id', authMiddleware, (req, res) => {
-  res.json({ id: parseInt(req.params.id), product: 'Laptop', quantity: 2, total: 3000000 });
-});
-
-app.put('/sales/:id', authMiddleware, (req, res) => {
-  res.json({ id: parseInt(req.params.id), ...req.body });
-});
-
-app.delete('/sales/:id', authMiddleware, (req, res) => {
-  res.json({ message: 'Sale ' + req.params.id + ' deleted' });
-});
-
-// ---------- FINANCIAL ----------
-app.get('/financial', authMiddleware, (req, res) => {
-  res.json({
-    summary: {
-      totalRevenue: 1250000,
-      totalExpenses: 450000,
-      totalLoans: 3200000,
-      totalCustomers: 156,
-      activeLoans: 89,
-      completedLoans: 67
-    },
-    monthlyData: [
-      { month: 'Jan', revenue: 150000, expenses: 50000 },
-      { month: 'Feb', revenue: 180000, expenses: 55000 },
-      { month: 'Mar', revenue: 200000, expenses: 60000 }
-    ],
-    recentTransactions: []
-  });
-});
-
-// ---------- CAPITAL ----------
-app.get('/capital', authMiddleware, (req, res) => {
-  res.json({
-    currentAmount: 2500000,
-    totalInvested: 5000000,
-    totalWithdrawn: 2500000,
-    transactions: [
-      { id: 1, type: 'investment', amount: 1000000, date: '2026-01-01', description: 'Initial capital' },
-      { id: 2, type: 'withdrawal', amount: 500000, date: '2026-02-15', description: 'Business expenses' }
-    ]
-  });
-});
-
-app.get('/capital/transactions', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, type: 'investment', amount: 1000000, date: '2026-01-01', description: 'Initial capital' },
-    { id: 2, type: 'withdrawal', amount: 500000, date: '2026-02-15', description: 'Business expenses' },
-    { id: 3, type: 'investment', amount: 2000000, date: '2026-03-01', description: 'Additional capital' }
-  ]);
-});
-
-app.post('/capital/update', authMiddleware, (req, res) => {
-  const { amount, type, description } = req.body;
-  res.json({ 
-    success: true, 
-    message: 'Capital updated successfully',
-    transaction: {
-      id: Date.now(),
-      type: type || 'investment',
-      amount: amount || 1000000,
-      date: new Date().toISOString(),
-      description: description || 'Capital update'
-    },
-    newAmount: 3000000
-  });
-});
-
-// ---------- NOTIFICATIONS ----------
-app.get('/notifications', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, title: 'Welcome', message: 'Welcome to Polly Consults!', read: false, created_at: new Date().toISOString() },
-    { id: 2, title: 'System Ready', message: 'Your system is ready to use.', read: true, created_at: new Date().toISOString() }
-  ]);
-});
-
-app.get('/notifications/unread-count', authMiddleware, (req, res) => {
-  res.json({ unreadCount: 1 });
-});
-
-app.post('/notifications/:id/read', authMiddleware, (req, res) => {
-  res.json({ message: 'Notification ' + req.params.id + ' marked as read' });
-});
-
-// ---------- AUDIT ----------
-app.get('/audit', authMiddleware, (req, res) => {
-  res.json([
-    { id: 1, action: 'Login', user: 'admin', timestamp: new Date().toISOString() },
-    { id: 2, action: 'Created customer', user: 'admin', timestamp: new Date().toISOString() }
-  ]);
-});
-
-// ---------- SETTINGS ----------
-app.get('/settings', authMiddleware, (req, res) => {
-  res.json({
-    companyName: 'Polly Consults',
-    currency: 'UGX',
-    theme: 'light',
-    notifications: true
-  });
-});
-
-app.put('/settings', authMiddleware, (req, res) => {
-  res.json({ message: 'Settings updated', ...req.body });
+  } catch (error) {
+    console.error(`❌ Error loading ${routeName}:`, error.message);
+  }
 });
 
 // ==================== 404 HANDLER ====================
