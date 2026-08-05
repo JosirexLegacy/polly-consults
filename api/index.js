@@ -1,10 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const serverless = require('serverless-http');
+const fs = require('fs');
 
 const app = express();
 
 console.log('🚀 Backend starting...');
+console.log('📁 Current directory:', __dirname);
+console.log('📁 Files in current directory:', fs.readdirSync('.').join(', '));
+console.log('📁 Does src/routes/auth.routes.js exist?', fs.existsSync('./src/routes/auth.routes.js'));
 
 app.use(cors());
 app.use(express.json());
@@ -34,12 +38,16 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Test route works!' });
 });
 
-// Mount routes - FIXED PATH (./src instead of ../src)
+// Mount routes with detailed error logging
 try {
-  app.use('/auth', require('./src/routes/auth.routes'));
+  console.log('📁 Attempting to load auth routes...');
+  const authRoutes = require('./src/routes/auth.routes');
+  console.log('📁 Auth routes loaded, type:', typeof authRoutes);
+  app.use('/auth', authRoutes);
   console.log('✅ Auth routes mounted');
 } catch (error) {
   console.error('❌ Auth error:', error.message);
+  console.error('❌ Auth error stack:', error.stack);
 }
 
 try {
