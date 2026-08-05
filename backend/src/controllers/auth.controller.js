@@ -1,40 +1,59 @@
+const jwt = require('jsonwebtoken');
+
+// Simple login - single user system
 const adminLogin = async (req, res) => {
   try {
     const { username, password } = req.body;
-    
-    console.log('🔍 Login attempt for:', username);
-    console.log('🔍 Password provided:', password ? 'yes' : 'no');
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Get admin from database
-    const result = await pool.query(
-      'SELECT id, username, password_hash, full_name FROM admins WHERE username = $1',
-      [username]
-    );
+    // Get credentials from environment variables
+    const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-    console.log('🔍 User found:', result.rows.length > 0);
+    // Check credentials
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      const token = jwt.sign(
+        { username: ADMIN_USERNAME, role: 'admin' },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
 
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.json({
+        success: true,
+        token,
+        admin: {
+          username: ADMIN_USERNAME,
+          full_name: 'System Administrator'
+        }
+      });
     }
 
-    const admin = result.rows[0];
-    console.log('🔍 Password hash in DB:', admin.password_hash);
+    // Invalid credentials
+    return res.status(401).json({ error: 'Invalid credentials' });
 
-    // Compare password
-    const isPasswordValid = await bcrypt.compare(password, admin.password_hash);
-    console.log('🔍 Password valid:', isPasswordValid);
-    
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // ... rest of the code
   } catch (error) {
-    console.error('❌ Login error:', error);
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+};
+
+// Get current admin
+const getCurrentAdmin = async (req, res) => {
+  try {
+    res.json({
+      username: req.admin.username,
+      full_name: 'System Administrator'
+    });
+  } catch (error) {
+    console.error('Get admin error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = {
+  adminLogin,
+  getCurrentAdmin
 };
