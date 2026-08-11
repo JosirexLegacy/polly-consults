@@ -138,6 +138,16 @@ app.post(
   })
 );
 
+app.delete(
+  '/customers/:id',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const result = await pool.query('DELETE FROM customers WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!result.rows[0]) return res.status(404).json({ error: 'Customer not found' });
+    res.status(204).end();
+  })
+);
+
 // ==================== LOANS ====================
 app.get(
   '/loans',
@@ -501,6 +511,48 @@ app.get(
       settings[row.key] = row.value;
     });
     res.json(settings);
+  })
+);
+
+// Body is a flat object, e.g. { business_name, currency, phone, ... }.
+// Stored as key/value rows to match how GET /settings reads them back.
+// Assumes `key` has a unique constraint — if it doesn't, this will throw
+// a clear duplicate-key or constraint error in the logs rather than
+// silently creating duplicate rows.
+app.put(
+  '/settings',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const updates = req.body || {};
+    const keys = Object.keys(updates);
+    if (keys.length === 0) {
+      return res.status(400).json({ error: 'No settings provided' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const key of keys) {
+        await client.query(
+          `INSERT INTO settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [key, String(updates[key])]
+        );
+      }
+      await client.query('COMMIT');
+
+      const result = await client.query('SELECT * FROM settings');
+      const settings = {};
+      result.rows.forEach((row) => {
+        settings[row.key] = row.value;
+      });
+      res.json(settings);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   })
 );
 
