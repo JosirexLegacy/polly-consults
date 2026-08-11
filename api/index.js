@@ -354,14 +354,16 @@ app.get(
   '/reports/dashboard',
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const [customers, loans, payments, expenses] = await Promise.all([
+    const [customers, loans, payments, expenses, capital] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM customers'),
       pool.query("SELECT COUNT(*) FROM loans WHERE status = 'active'"),
       pool.query('SELECT COALESCE(SUM(amount_paid), 0) as total_paid FROM loan_payments'),
       pool.query('SELECT COALESCE(SUM(amount), 0) as total_expenses FROM expenses'),
+      pool.query('SELECT current_amount FROM business_capital LIMIT 1'),
     ]);
 
     res.json({
+      totalCapital: capital.rows[0] ? parseFloat(capital.rows[0].current_amount) : 0,
       stats: {
         totalCustomers: parseInt(customers.rows[0].count, 10),
         activeLoans: parseInt(loans.rows[0].count, 10),
@@ -382,20 +384,20 @@ app.get(
   })
 );
 
-// Body: { amount, type: 'deposit' | 'withdrawal', source, reason, loan_id? }
+// Body: { amount, type: 'credit' | 'debit', reason, source? }
 // Atomically: reads the current balance, computes the new one, inserts the
 // ledger row with balance_after, and updates the singleton balance row.
 app.post(
   '/capital/update',
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const { amount, type, source, reason, loan_id } = req.body || {};
+    const { amount, type, source, reason } = req.body || {};
 
     if (!amount || !type) {
       return res.status(400).json({ error: 'amount and type are required' });
     }
-    if (type !== 'deposit' && type !== 'withdrawal') {
-      return res.status(400).json({ error: "type must be 'deposit' or 'withdrawal'" });
+    if (type !== 'credit' && type !== 'debit') {
+      return res.status(400).json({ error: "type must be 'credit' or 'debit'" });
     }
 
     const client = await pool.connect();
@@ -404,12 +406,12 @@ app.post(
 
       const current = await client.query('SELECT current_amount FROM business_capital LIMIT 1');
       const currentAmount = current.rows[0] ? Number(current.rows[0].current_amount) : 0;
-      const newBalance = type === 'deposit' ? currentAmount + Number(amount) : currentAmount - Number(amount);
+      const newBalance = type === 'credit' ? currentAmount + Number(amount) : currentAmount - Number(amount);
 
       const txResult = await client.query(
-        `INSERT INTO capital_transactions (amount, type, source, reason, balance_after, loan_id)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [amount, type, source || null, reason || null, newBalance, loan_id || null]
+        `INSERT INTO capital_transactions (amount, type, source, reason, balance_after)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [amount, type, source || null, reason || null, newBalance]
       );
 
       if (current.rows[0]) {
@@ -473,15 +475,15 @@ app.get(
   '/audit/financial-summary',
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const [deposits, withdrawals, balance, recent] = await Promise.all([
-      pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM capital_transactions WHERE type = 'deposit'"),
-      pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM capital_transactions WHERE type = 'withdrawal'"),
+    const [credits, debits, balance, recent] = await Promise.all([
+      pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM capital_transactions WHERE type = 'credit'"),
+      pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM capital_transactions WHERE type = 'debit'"),
       pool.query('SELECT current_amount FROM business_capital LIMIT 1'),
       pool.query('SELECT * FROM capital_transactions ORDER BY created_at DESC LIMIT 10'),
     ]);
     res.json({
-      totalDeposits: parseFloat(deposits.rows[0].total),
-      totalWithdrawals: parseFloat(withdrawals.rows[0].total),
+      totalCredits: parseFloat(credits.rows[0].total),
+      totalDebits: parseFloat(debits.rows[0].total),
       currentBalance: balance.rows[0] ? parseFloat(balance.rows[0].current_amount) : 0,
       recentTransactions: recent.rows,
     });
