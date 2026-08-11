@@ -254,6 +254,15 @@ app.post(
   })
 );
 
+app.get(
+  '/expenses/categories',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const result = await pool.query('SELECT DISTINCT category FROM expenses WHERE category IS NOT NULL');
+    res.json(result.rows.map((r) => r.category));
+  })
+);
+
 // ==================== INVENTORY ====================
 app.get(
   '/inventory/products',
@@ -373,6 +382,56 @@ app.get(
   })
 );
 
+// Body: { amount, type: 'deposit' | 'withdrawal', source, reason, loan_id? }
+// Atomically: reads the current balance, computes the new one, inserts the
+// ledger row with balance_after, and updates the singleton balance row.
+app.post(
+  '/capital/update',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const { amount, type, source, reason, loan_id } = req.body || {};
+
+    if (!amount || !type) {
+      return res.status(400).json({ error: 'amount and type are required' });
+    }
+    if (type !== 'deposit' && type !== 'withdrawal') {
+      return res.status(400).json({ error: "type must be 'deposit' or 'withdrawal'" });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const current = await client.query('SELECT current_amount FROM business_capital LIMIT 1');
+      const currentAmount = current.rows[0] ? Number(current.rows[0].current_amount) : 0;
+      const newBalance = type === 'deposit' ? currentAmount + Number(amount) : currentAmount - Number(amount);
+
+      const txResult = await client.query(
+        `INSERT INTO capital_transactions (amount, type, source, reason, balance_after, loan_id)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [amount, type, source || null, reason || null, newBalance, loan_id || null]
+      );
+
+      if (current.rows[0]) {
+        await client.query('UPDATE business_capital SET current_amount = $1, updated_at = NOW()', [newBalance]);
+      } else {
+        await client.query(
+          'INSERT INTO business_capital (id, current_amount, updated_at) VALUES (true, $1, NOW())',
+          [newBalance]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.status(201).json({ transaction: txResult.rows[0], newBalance });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  })
+);
+
 // ==================== AUDIT ====================
 app.get(
   '/audit',
@@ -380,6 +439,52 @@ app.get(
   asyncHandler(async (req, res) => {
     const result = await pool.query('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 50');
     res.json(result.rows);
+  })
+);
+
+app.get(
+  '/audit/logs',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const result = await pool.query('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1', [limit]);
+    res.json(result.rows);
+  })
+);
+
+app.get(
+  '/audit/summary',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const [byAction, byTable, total] = await Promise.all([
+      pool.query('SELECT action, COUNT(*) as count FROM audit_logs GROUP BY action ORDER BY count DESC'),
+      pool.query('SELECT table_name, COUNT(*) as count FROM audit_logs GROUP BY table_name ORDER BY count DESC'),
+      pool.query('SELECT COUNT(*) FROM audit_logs'),
+    ]);
+    res.json({
+      totalLogs: parseInt(total.rows[0].count, 10),
+      byAction: byAction.rows,
+      byTable: byTable.rows,
+    });
+  })
+);
+
+app.get(
+  '/audit/financial-summary',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const [deposits, withdrawals, balance, recent] = await Promise.all([
+      pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM capital_transactions WHERE type = 'deposit'"),
+      pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM capital_transactions WHERE type = 'withdrawal'"),
+      pool.query('SELECT current_amount FROM business_capital LIMIT 1'),
+      pool.query('SELECT * FROM capital_transactions ORDER BY created_at DESC LIMIT 10'),
+    ]);
+    res.json({
+      totalDeposits: parseFloat(deposits.rows[0].total),
+      totalWithdrawals: parseFloat(withdrawals.rows[0].total),
+      currentBalance: balance.rows[0] ? parseFloat(balance.rows[0].current_amount) : 0,
+      recentTransactions: recent.rows,
+    });
   })
 );
 
